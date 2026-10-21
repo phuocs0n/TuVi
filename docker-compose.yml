@@ -1,0 +1,55 @@
+# Môi trường DEV:  cp .env.example .env && docker compose up --build
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tuvi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Hãy đặt POSTGRES_PASSWORD trong .env}
+      POSTGRES_DB: ${POSTGRES_DB:-tuvi}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tuvi}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  ai-engine:
+    build:
+      context: .
+      dockerfile: services/ai-engine/Dockerfile
+    env_file: .env
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file: .env
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
