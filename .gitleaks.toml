@@ -1,0 +1,12 @@
+title = "Tử Vi AI gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "File mẫu chỉ chứa placeholder"
+paths = [
+  '''\.env\.example$''',
+  '''pnpm-lock\.yaml$''',
+  '''uv\.lock$''',
+]

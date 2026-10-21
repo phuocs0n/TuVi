@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      js: ${{ steps.f.outputs.js }}
+      py: ${{ steps.f.outputs.py }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            js:
+              - 'apps/web/**'
+              - 'packages/shared-types/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+            py:
+              - 'apps/api/**'
+              - 'services/ai-engine/**'
+              - 'packages/laso-engine/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.js == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm --filter web build
+
+  python:
+    needs: changes
+    if: needs.changes.outputs.py == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: laso-engine, path: packages/laso-engine, src: src }
+          - { name: api, path: apps/api, src: app }
+          - { name: ai-engine, path: services/ai-engine, src: app }
+    name: python (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --frozen
+      - name: Lint
+        run: |
+          uv run ruff check ${{ matrix.path }}
+          uv run ruff format --check ${{ matrix.path }}
+      - name: Type check
+        run: uv run mypy ${{ matrix.path }}/${{ matrix.src }}
+      - name: Unit test
+        working-directory: ${{ matrix.path }}
+        run: uv run pytest -q --cov=. --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.name }}
+          path: ${{ matrix.path }}/coverage.xml
+
+  docker-build:
+    needs: changes
+    if: needs.changes.outputs.py == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { image: api, file: apps/api/Dockerfile }
+          - { image: ai-engine, file: services/ai-engine/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # Job tổng hợp — đặt làm "required status check" trong Branch protection
+  ci-ok:
+    if: always()
+    needs: [pr-title, web, python, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "Có job thất bại"; exit 1
+          fi

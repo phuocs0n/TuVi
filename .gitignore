@@ -1,0 +1,53 @@
+# ===== Secrets — KHÔNG BAO GIỜ commit =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+*.p12
+secrets/
+
+# ===== Node / Next.js =====
+node_modules/
+.pnpm-store/
+.next/
+out/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+pnpm-debug.log*
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+
+# ===== AI / RAG data =====
+data/raw/
+data/vectorstore/
+*.faiss
+*.parquet
+
+# ===== Docker / infra =====
+docker-data/
+pgdata/
+
+# ===== IDE / OS =====
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log

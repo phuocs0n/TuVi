@@ -1,0 +1,47 @@
+# Chạy trên VPS bởi workflow deploy.yml:  docker compose -f infra/docker-compose.prod.yml up -d
+# Cần file .env cạnh file này (workflow ghi từ GitHub Secrets) và biến IMAGE_TAG.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - api
+
+  api:
+    image: ghcr.io/phuocs0n/tuvi-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ai-engine:
+    image: ghcr.io/phuocs0n/tuvi-ai-engine:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    # Không publish port: chỉ api gọi được qua mạng nội bộ
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  pgdata:

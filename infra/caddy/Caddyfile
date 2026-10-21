@@ -1,0 +1,5 @@
+# SSL Let's Encrypt tự động. DNS: api.tuviai.id.vn  A → IP của VPS
+api.tuviai.id.vn {
+	encode gzip
+	reverse_proxy api:8000
+}
