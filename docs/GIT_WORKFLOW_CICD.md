@@ -169,7 +169,9 @@ flowchart LR
 
 Sau đó thêm domain `tuviai.id.vn` + `www` trong Vercel → *Settings → Domains*. Chạy `bash scripts/check-domain.sh tuviai.id.vn` hoặc kích hoạt workflow *Domain check* để xác nhận.
 
-> Lưu ý: tên miền `.id.vn` thường mất vài phút đến vài giờ để DNS lan truyền sau khi đổi bản ghi.
+**Nơi quản lý DNS:** tên miền được đăng ký miễn phí qua Nhân Hòa; đăng nhập https://zonedns.vn bằng tài khoản trong email "Thông tin quản lý tên miền" để thêm các bản ghi ở bảng trên. Không lưu mật khẩu quản trị domain trong repo, chat hay ghi chú; sau lần đăng nhập đầu hãy đổi mật khẩu và bật xác thực 2 lớp nếu có.
+
+> Lưu ý: tên miền `.id.vn` thường mất vài phút đến vài giờ để DNS lan truyền sau khi đổi bản ghi. Gói website miễn phí đi kèm chỉ dùng thử 1 tháng; nếu không dùng thì không ảnh hưởng đến việc trỏ domain về Vercel/VPS.
 
 ## 4. Bảo mật & Secrets
 
