@@ -1,0 +1,15 @@
+name: Báo lỗi
+description: Báo cáo một lỗi
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: Mô tả lỗi, description: Điều gì đã xảy ra? }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Các bước tái hiện }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Kết quả mong đợi }
