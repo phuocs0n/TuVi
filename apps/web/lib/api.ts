@@ -1,4 +1,4 @@
-import type { LaSo, LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
+import type { LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
@@ -37,7 +37,6 @@ function errorMessage(data: unknown): string | null {
   return null;
 }
 
-export const lapLaSo = (req: LaSoRequest) => post<LaSo>("/v1/la-so", req);
-
+// Lá số được tính ngay trên trình duyệt (@tuvi/laso); chỉ luận giải AI mới gọi máy chủ.
 export const luanGiai = (req: LaSoRequest, cauHoi?: string) =>
   post<LuanGiaiResponse>("/v1/luan-giai", cauHoi ? { ...req, cau_hoi: cauHoi } : req);

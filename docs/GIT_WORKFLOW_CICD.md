@@ -124,7 +124,7 @@ Bật hook cục bộ: `pip install pre-commit && pre-commit install --hook-type
 
 ### CI (`ci.yml`)
 
-- **web**: `pnpm install --frozen-lockfile` → ESLint → `tsc --noEmit` → `next build`
+- **web**: `pnpm install --frozen-lockfile` → ESLint → `tsc --noEmit` → `vitest` (đối chiếu engine TypeScript với Python) → `next build`
 - **python** (matrix: `laso-engine`, `api`, `ai-engine`): `uv sync --frozen` → `ruff check` + `ruff format --check` → `mypy` (strict) → `pytest --cov` (laso-engine fail dưới 80%)
 - **docker-build**: build thử image api và ai-engine (không push)
 - **pr-title**: kiểm tra tiêu đề PR theo Conventional Commits

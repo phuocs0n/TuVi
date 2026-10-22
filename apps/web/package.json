@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tuvi/laso": "workspace:*",
     "@tuvi/shared-types": "workspace:*",
     "next": "^15.1.0",
     "react": "^19.0.0",

@@ -28,6 +28,7 @@ jobs:
             js:
               - 'apps/web/**'
               - 'packages/shared-types/**'
+              - 'packages/laso-ts/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
             py:
@@ -74,6 +75,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r lint
       - run: pnpm -r typecheck
+      - run: pnpm -r --if-present test
       - run: pnpm --filter web build
 
   python:
