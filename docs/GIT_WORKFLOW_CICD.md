@@ -118,7 +118,7 @@ Bật hook cục bộ: `pip install pre-commit && pre-commit install --hook-type
 | Workflow | Kích hoạt | Nội dung |
 |---|---|---|
 | `ci.yml` | PR / push `main`, `develop` | Chỉ chạy phần thay đổi (`paths-filter`) |
-| `deploy.yml` | push `main`, tag `v*` | Build image → GHCR → deploy VPS → smoke test |
+| `deploy.yml` | Chạy tay (tạm thời; xem ghi chú dưới) | Build image → GHCR → deploy VPS → smoke test |
 | `secret-scan.yml` | PR / push | Gitleaks + TruffleHog |
 | `domain-check.yml` | Hằng ngày + thủ công | Kiểm tra DNS/HTTPS/SSL của `tuviai.id.vn` |
 
@@ -142,6 +142,8 @@ pnpm install && pnpm -r lint && pnpm -r typecheck && pnpm --filter web build
 ```
 
 ### CD (`deploy.yml`)
+
+> Hiện `deploy.yml` chỉ chạy tay (Actions → Deploy → Run workflow) vì chưa có VPS/secrets. Khi sẵn sàng, bỏ comment khối `push` ở đầu file để tự deploy khi merge vào `main` hoặc gắn tag `v*`. Frontend không phụ thuộc workflow này: Vercel tự deploy khi push `main`.
 
 ```mermaid
 flowchart LR
