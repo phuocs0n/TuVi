@@ -1,0 +1,45 @@
+# Render Blueprint — https://render.com/docs/infrastructure-as-code
+# Tạo: Dashboard → New → Blueprint → chọn repo phuocs0n/TuVi (đọc file này ở gốc repo).
+services:
+  - type: web
+    name: tuvi-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: APP_ENV
+        value: production
+      - key: APP_DOMAIN
+        value: tuviai.id.vn
+      # Địa chỉ nội bộ (host:port) của AI engine; API tự thêm http://
+      - key: AI_ENGINE_URL
+        fromService:
+          type: web
+          name: tuvi-ai-engine
+          property: hostport
+
+  - type: web
+    name: tuvi-ai-engine
+    runtime: docker
+    dockerfilePath: ./services/ai-engine/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8001"
+      - key: LLM_MODEL
+        value: claude-sonnet-5-5
+      # Nhập tay trong Dashboard sau khi tạo Blueprint (không commit key vào repo)
+      - key: ANTHROPIC_API_KEY
+        sync: false

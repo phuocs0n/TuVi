@@ -157,6 +157,7 @@ flowchart LR
 ```
 
 - **Frontend → Vercel** (khuyến nghị: Git Integration, không cần workflow). Branch `main` = Production, PR = Preview URL.
+- **Backend + AI Engine → Render** (khuyến nghị khi chưa có VPS): khai báo trong `render.yaml`, tự deploy khi có commit vào `main`; xem [DEPLOY_RENDER.md](DEPLOY_RENDER.md).
 - **Backend + AI Engine → VPS**: Docker Compose + Caddy (SSL Let's Encrypt tự động). Image tag theo commit SHA nên rollback = deploy lại SHA cũ.
 - `concurrency` chống hai lần deploy chồng nhau; `environment: production` cho phép chặn bằng reviewer.
 - Phương án thay thế: **Render** (gọi Deploy Hook bằng `curl`), **AWS** (ECR + ECS Fargate qua `aws-actions/amazon-ecs-deploy-task-definition`).
