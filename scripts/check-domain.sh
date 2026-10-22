@@ -2,7 +2,8 @@
 # Kiểm tra domain: DNS, HTTP(S), hạn SSL.  Dùng:  bash scripts/check-domain.sh tuviai.id.vn
 set -u
 DOMAIN="${1:-tuviai.id.vn}"
-HOSTS=("$DOMAIN" "www.$DOMAIN" "api.$DOMAIN")
+# Chưa có backend nên chưa kiểm tra api.$DOMAIN; khi có thì thêm "api.$DOMAIN" vào danh sách.
+HOSTS=("$DOMAIN" "www.$DOMAIN")
 fail=0
 
 # dig không có sẵn ở mọi máy (vd Git Bash trên Windows) → fallback sang getent
