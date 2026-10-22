@@ -85,7 +85,7 @@ pnpm -r lint && pnpm -r typecheck
 ```
 
 Mọi PR chạy lint, type-check, unit test, build Docker và quét secret. Frontend tự deploy lên Vercel khi merge vào `main`; deploy backend (`deploy.yml`) hiện chạy tay cho đến khi có VPS.
-Chi tiết: [docs/GIT_WORKFLOW_CICD.md](docs/GIT_WORKFLOW_CICD.md).
+Chi tiết: [docs/GIT_WORKFLOW_CICD.md](docs/GIT_WORKFLOW_CICD.md). Triển khai backend lên Render: [docs/DEPLOY_RENDER.md](docs/DEPLOY_RENDER.md).
 
 ## 🗺️ Roadmap
 
