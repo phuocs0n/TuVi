@@ -16,7 +16,7 @@
 
 ## ✨ Tính năng
 
-- **An lá số tự động**: Can Chi, Mệnh/Thân, Cục từ ngày giờ sinh âm lịch.
+- **An lá số tự động**: nhập dương hoặc âm lịch (xử lý tháng nhuận), an Mệnh/Thân, Cục, 14 chính tinh, ~30 phụ tinh, Tứ Hóa, Tuần/Triệt, Đại hạn, vòng Trường Sinh.
 - **Luận giải bằng AI**: RAG trên kho tri thức Tử Vi + LLM (Claude/OpenAI).
 - **API rõ ràng** (FastAPI, OpenAPI tại `/docs`) và giao diện Next.js.
 - **Chất lượng kỹ thuật**: engine thuần Python, test coverage > 95%, type-check strict, CI/CD tự động.
@@ -60,8 +60,8 @@ pnpm install && pnpm dev
 Thử API:
 
 ```bash
-curl -X POST localhost:8000/v1/laso -H 'content-type: application/json' \
-  -d '{"nam_am": 1990, "thang_am": 3, "gio": 6}'
+curl -X POST localhost:8000/v1/la-so -H 'content-type: application/json' \
+  -d '{"ho_ten": "Nguyễn Văn A", "gioi_tinh": "nam", "ngay": 15, "thang": 3, "nam": 1990, "gio": 6}'
 ```
 
 ## 📁 Cấu trúc
@@ -89,12 +89,11 @@ Chi tiết: [docs/GIT_WORKFLOW_CICD.md](docs/GIT_WORKFLOW_CICD.md).
 
 ## 🗺️ Roadmap
 
-- [x] Engine: Can Chi, Mệnh/Thân, Cục
+- [x] Engine: đổi dương↔âm lịch, an 12 cung, 14 chính tinh, phụ tinh, Tứ Hóa, Đại hạn
+- [x] Giao diện nhập ngày sinh và hiển thị lá số
 - [x] Monorepo, CI/CD, quét secret
-- [ ] An 14 chính tinh và phụ tinh
-- [ ] Đổi dương lịch → âm lịch
+- [ ] Độ sáng tối (Miếu/Vượng/Đắc/Hãm) của chính tinh, Tiểu hạn, Lưu niên
 - [ ] Kho tri thức RAG (pgvector)
-- [ ] Giao diện nhập ngày sinh và hiển thị lá số
 - [ ] Đăng nhập và thanh toán
 
 ## 🤝 Đóng góp
