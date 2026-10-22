@@ -84,7 +84,7 @@ uv run mypy packages/laso-engine/src
 pnpm -r lint && pnpm -r typecheck
 ```
 
-Mọi PR chạy lint, type-check, unit test, build Docker và quét secret. Merge vào `main` tự build image lên GHCR và deploy.
+Mọi PR chạy lint, type-check, unit test, build Docker và quét secret. Frontend tự deploy lên Vercel khi merge vào `main`; deploy backend (`deploy.yml`) hiện chạy tay cho đến khi có VPS.
 Chi tiết: [docs/GIT_WORKFLOW_CICD.md](docs/GIT_WORKFLOW_CICD.md).
 
 ## 🗺️ Roadmap

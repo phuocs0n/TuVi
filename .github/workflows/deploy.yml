@@ -1,9 +1,11 @@
 name: Deploy
 
+# Tạm thời chỉ chạy tay (Actions → Deploy → Run workflow) vì chưa có VPS/secrets.
+# Khi đã có VPS và khai báo secrets VPS_*, bỏ comment 4 dòng `push` bên dưới để tự deploy khi merge vào main.
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  # push:
+  #   branches: [main]
+  #   tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
