@@ -1,0 +1,21 @@
+{
+  "name": "@tuvi/laso",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Engine an lá số Tử Vi bằng TypeScript (chạy trên trình duyệt). Bản gốc: packages/laso-engine (Python).",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tuvi/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}

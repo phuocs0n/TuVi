@@ -17,6 +17,7 @@
 ## ✨ Tính năng
 
 - **An lá số tự động**: nhập dương hoặc âm lịch (xử lý tháng nhuận), an Mệnh/Thân, Cục, 14 chính tinh, ~30 phụ tinh, Tứ Hóa, Tuần/Triệt, Đại hạn, vòng Trường Sinh.
+- **Ra lá số tức thì**: engine chạy ngay trên trình duyệt (TypeScript), không phải chờ máy chủ; chỉ luận giải AI mới gọi API.
 - **Luận giải bằng AI**: RAG trên kho tri thức Tử Vi + LLM (Claude/OpenAI).
 - **API rõ ràng** (FastAPI, OpenAPI tại `/docs`) và giao diện Next.js.
 - **Chất lượng kỹ thuật**: engine thuần Python, test coverage > 95%, type-check strict, CI/CD tự động.
@@ -71,6 +72,7 @@ apps/web            Next.js frontend
 apps/api            FastAPI backend
 services/ai-engine  RAG + LLM
 packages/laso-engine  Engine an lá số (Python thuần)
+packages/laso-ts      Engine an lá số bản TypeScript (chạy trên trình duyệt)
 packages/shared-types Type dùng chung FE/BE
 infra/              docker-compose.prod, Caddy
 ```

@@ -1,6 +1,6 @@
 # Triển khai backend lên Render
 
-Frontend chạy trên Vercel (`tuviai.id.vn`). Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
+Frontend chạy trên Vercel (`tuviai.id.vn`) và **tự tính lá số ngay trên trình duyệt** (gói `packages/laso-ts`), nên xem lá số không cần backend. Backend trên Render chỉ phục vụ **luận giải AI** (và API công khai). Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
 | Dịch vụ | Vai trò | Địa chỉ |
 |---|---|---|
@@ -15,7 +15,7 @@ Frontend chạy trên Vercel (`tuviai.id.vn`). Backend gồm 2 dịch vụ Docke
 
 > Tên dịch vụ có thể bị Render thêm hậu tố nếu `tuvi-api` đã có người dùng; hãy lấy URL thật trong trang dịch vụ.
 
-## 2. Trỏ frontend về API
+## 2. Trỏ frontend về API (chỉ cần cho luận giải AI)
 
 Vercel → project `tu-vi` → **Settings → Environment Variables**:
 
@@ -39,3 +39,10 @@ API cho phép CORS từ `tuviai.id.vn`, `www.tuviai.id.vn` và mọi `*.vercel.a
 - Dịch vụ **ngủ sau ~15 phút không có truy cập**; lần gọi đầu tiên sau đó mất khoảng 30–60 giây để đánh thức. Request luận giải AI có thể chờ lâu hơn khi cả hai dịch vụ cùng ngủ (API đợi tối đa 90 giây).
 - Muốn không bị ngủ, nâng `plan` lên `starter` trong `render.yaml`.
 - `deploy.yml` (VPS) vẫn để chạy tay và không dùng cho Render: Render tự build và deploy mỗi khi có commit mới vào `main` (`autoDeployTrigger: commit`).
+
+## Hai engine, một nguồn chuẩn
+
+Thuật toán an lá số có hai bản: Python (`packages/laso-engine`, **nguồn chuẩn**, dùng cho API và AI) và TypeScript (`packages/laso-ts`, chạy trên trình duyệt). Để hai bản không lệch nhau:
+
+- `packages/laso-engine/tests/golden_gen.py` sinh `packages/laso-ts/test/golden.json` (mọi mùng 1 âm lịch 1900–2100, hơn 500 lá số mẫu và các ca lỗi, so bằng băm SHA-256 của toàn bộ kết quả).
+- Sửa công thức ở Python thì chạy `uv run python packages/laso-engine/tests/golden_gen.py` rồi sửa bản TypeScript cho khớp. Test Python (`test_golden.py`) sẽ báo đỏ nếu quên sinh lại, test `vitest` báo đỏ nếu bản TypeScript lệch.
