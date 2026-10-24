@@ -1,4 +1,4 @@
-import type { LaSo, LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
+import type { LaSo, LaSoRequest } from "@tuvi/shared-types";
 
 import { lapLaSo as anLaSo } from "@/lib/laso/tuvi";
 
@@ -9,27 +9,6 @@ export class ApiError extends Error {
   ) {
     super(message);
   }
-}
-
-async function post<T>(url: string, body: unknown): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    // fetch chỉ ném lỗi khi không tới được máy chủ (sai URL, máy chủ tắt, bị CORS chặn…)
-    console.error(`[api] POST ${url} thất bại:`, e);
-    throw new ApiError(`Không kết nối được máy chủ (${url}). Vui lòng thử lại sau.`, 0);
-  }
-  const data: unknown = await res.json().catch(() => null);
-  if (!res.ok) {
-    console.error(`[api] POST ${url} trả về ${res.status}:`, data);
-    throw new ApiError(errorMessage(data) ?? `Lỗi máy chủ (${res.status}) tại ${url}`, res.status);
-  }
-  return data as T;
 }
 
 function errorMessage(data: unknown): string | null {
@@ -49,6 +28,46 @@ export async function lapLaSo(req: LaSoRequest): Promise<LaSo> {
   }
 }
 
-/** Lá số được an ngay trên trình duyệt; luận giải AI gọi route `app/api/luan-giai` cùng tên miền. */
-export const luanGiai = (req: LaSoRequest, cauHoi?: string) =>
-  post<LuanGiaiResponse>("/api/luan-giai", cauHoi ? { ...req, cau_hoi: cauHoi } : req);
+/**
+ * Hỏi AI qua route `app/api/luan-giai` cùng tên miền. Câu trả lời được stream dần:
+ * `onText` nhận toàn bộ phần chữ đã có sau mỗi lần nhận thêm.
+ */
+export async function luanGiai(
+  req: LaSoRequest,
+  cauHoi: string | undefined,
+  onText: (text: string) => void,
+): Promise<string> {
+  const url = "/api/luan-giai";
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(cauHoi ? { ...req, cau_hoi: cauHoi } : req),
+    });
+  } catch (e) {
+    console.error(`[api] POST ${url} thất bại:`, e);
+    throw new ApiError("Không kết nối được máy chủ. Vui lòng thử lại sau.", 0);
+  }
+  if (!res.ok || !res.body) {
+    const data: unknown = await res.json().catch(() => null);
+    console.error(`[api] POST ${url} trả về ${res.status}:`, data);
+    throw new ApiError(errorMessage(data) ?? `Lỗi máy chủ (${res.status})`, res.status);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      onText(text);
+    }
+  } catch (e) {
+    console.error(`[api] Stream ${url} bị ngắt:`, e);
+    text += "\n\n⚠️ Mất kết nối giữa chừng, vui lòng thử lại.";
+    onText(text);
+  }
+  return text;
+}

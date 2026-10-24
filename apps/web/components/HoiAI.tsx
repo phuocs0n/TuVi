@@ -7,9 +7,12 @@ import { ApiError, luanGiai } from "@/lib/api";
 
 type State =
   | { kind: "idle" }
-  | { kind: "loading" }
+  | { kind: "loading"; text: string }
   | { kind: "done"; text: string }
   | { kind: "error"; message: string };
+
+/** Bỏ phần nháp <think>…</think> của model suy luận, kể cả khi thẻ đóng chưa tới. */
+const boNhap = (text: string) => text.replace(/<think>[\s\S]*?(<\/think>|$)/g, "").trim();
 
 const GOI_Y = ["Công danh sự nghiệp", "Tình duyên, gia đạo", "Tài lộc năm nay"];
 
@@ -49,10 +52,10 @@ export function HoiAI({ req }: { req: LaSoRequest }) {
   const [cauHoi, setCauHoi] = useState("");
 
   const run = async (q?: string) => {
-    setState({ kind: "loading" });
+    setState({ kind: "loading", text: "" });
     try {
-      const res = await luanGiai(req, q?.trim() || undefined);
-      setState({ kind: "done", text: res.luan_giai });
+      const text = await luanGiai(req, q?.trim() || undefined, (t) => setState({ kind: "loading", text: t }));
+      setState({ kind: "done", text });
     } catch (e) {
       setState({ kind: "error", message: e instanceof ApiError ? e.message : "Đã có lỗi xảy ra." });
     }
@@ -62,8 +65,8 @@ export function HoiAI({ req }: { req: LaSoRequest }) {
     <section className="card hoi-ai" aria-live="polite">
       <h2>Hỏi AI</h2>
       <p className="muted">
-        Hỏi riêng một chủ đề, AI sẽ đọc toàn bộ 12 cung để trả lời. Mỗi lượt có thể mất 20–60 giây; mỗi người
-        được hỏi vài lần mỗi giờ.
+        Hỏi riêng một chủ đề, AI sẽ đọc toàn bộ 12 cung để trả lời. Câu trả lời hiện dần khi AI viết;
+        mỗi người được hỏi vài lần mỗi giờ.
       </p>
       <form
         className="ask"
@@ -80,7 +83,7 @@ export function HoiAI({ req }: { req: LaSoRequest }) {
           aria-label="Câu hỏi cho AI"
         />
         <button type="submit" className="btn primary" disabled={state.kind === "loading"}>
-          {state.kind === "loading" ? "AI đang luận giải…" : cauHoi.trim() ? "Hỏi AI" : "AI luận giải tổng quan"}
+          {state.kind === "loading" ? "AI đang viết…" : cauHoi.trim() ? "Hỏi AI" : "AI luận giải tổng quan"}
         </button>
       </form>
       <div className="chips">
@@ -91,7 +94,12 @@ export function HoiAI({ req }: { req: LaSoRequest }) {
         ))}
       </div>
       {state.kind === "error" && <p className="error">{state.message}</p>}
-      {state.kind === "done" && <VanBan text={state.text} />}
+      {state.kind === "loading" && !boNhap(state.text) && (
+        <p className="muted">AI đang đọc lá số… (dịch vụ miễn phí có thể phải chờ đến 1–2 phút)</p>
+      )}
+      {(state.kind === "loading" || state.kind === "done") && boNhap(state.text) && (
+        <VanBan text={boNhap(state.text)} />
+      )}
     </section>
   );
 }
