@@ -64,7 +64,7 @@ h2 { font-size: 1.25rem; }
 }
 .btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .btn:disabled { opacity: .6; cursor: progress; }
-.btn:focus-visible, input:focus-visible, select:focus-visible, .chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 /* Trang chủ */
 .hero { display: grid; gap: 32px; grid-template-columns: 1.1fr 1fr; align-items: start; padding-top: 16px; }
@@ -118,11 +118,9 @@ input:not([type="radio"]):not([type="checkbox"]), select {
 .chart-center dd { margin: 0; font-weight: 600; }
 
 .luan-giai { margin-top: 24px; display: grid; gap: 12px; }
-.ask { display: flex; gap: 8px; }
-.ask input { flex: 1; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { cursor: pointer; font: inherit; font-size: .85rem; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-.answer { white-space: pre-wrap; border-top: 1px solid var(--line); padding-top: 12px; }
+.luan-giai .muc { border-top: 1px solid var(--line); padding-top: 12px; }
+.luan-giai h3 { margin: 0 0 6px; font-size: 1.05rem; color: var(--brand); }
+.luan-giai .muc p { margin: 0 0 8px; line-height: 1.6; }
 
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; }
@@ -131,8 +129,7 @@ input:not([type="radio"]):not([type="checkbox"]), select {
   .chart { grid-template-columns: repeat(2, 1fr); grid-template-rows: none; }
   .cung { grid-row: auto !important; grid-column: auto !important; }
   .chart-center { grid-row: 1 !important; grid-column: 1 / -1 !important; order: -1; }
-  .ask { flex-direction: column; }
 }
 @media print {
-  .site-header, .site-footer, .toolbar, .luan-giai { display: none; }
+  .site-header, .site-footer, .toolbar { display: none; }
 }

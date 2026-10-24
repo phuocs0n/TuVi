@@ -61,7 +61,7 @@ export function LaSoView() {
         </Link>
       </div>
       <LaSoChart laSo={laSo} />
-      <LuanGiai req={req} />
+      <LuanGiai laSo={laSo} />
     </>
   );
 }
