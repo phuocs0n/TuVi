@@ -1,6 +1,9 @@
 import type { LaSo, LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+import { lapLaSo as anLaSo } from "@/lib/laso/tuvi";
+
+/** Backend chỉ cần cho luận giải AI; lá số được an ngay trên trình duyệt. */
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/$/, "") || null;
 
 export class ApiError extends Error {
   constructor(
@@ -12,6 +15,7 @@ export class ApiError extends Error {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
+  if (!API_URL) throw new ApiError("Tính năng luận giải AI chưa được cấu hình.", 503);
   const url = `${API_URL}${path}`;
   let res: Response;
   try {
@@ -41,7 +45,14 @@ function errorMessage(data: unknown): string | null {
   return null;
 }
 
-export const lapLaSo = (req: LaSoRequest) => post<LaSo>("/v1/la-so", req);
+export async function lapLaSo(req: LaSoRequest): Promise<LaSo> {
+  try {
+    return anLaSo(req);
+  } catch (e) {
+    if (e instanceof RangeError) throw new ApiError(e.message, 422);
+    throw e;
+  }
+}
 
 export const luanGiai = (req: LaSoRequest, cauHoi?: string) =>
   post<LuanGiaiResponse>("/v1/luan-giai", cauHoi ? { ...req, cau_hoi: cauHoi } : req);
