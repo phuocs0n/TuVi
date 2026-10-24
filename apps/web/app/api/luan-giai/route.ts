@@ -6,14 +6,17 @@ import { SYSTEM_PROMPT, buildPrompt } from "@/lib/luan-giai/prompt";
 
 // Luận giải AI chạy ngay trên Vercel, gọi một API chuẩn OpenAI (`/chat/completions`)
 // nên đổi nhà cung cấp chỉ cần đổi biến môi trường:
-//   AI_API_KEY   (bắt buộc) — ví dụ key `nvapi-...` của build.nvidia.com
-//   AI_BASE_URL  (tuỳ chọn) — mặc định NVIDIA; OpenRouter là https://openrouter.ai/api/v1
-//   AI_MODEL     (tuỳ chọn) — mặc định google/gemma-4-31b-it
+//   AI_API_KEY   (bắt buộc) — key OpenRouter `sk-or-...` hoặc NVIDIA `nvapi-...`
+//   AI_BASE_URL  (tuỳ chọn) — mặc định suy ra từ loại key
+//   AI_MODEL     (tuỳ chọn) — mặc định Gemma 4 31B (bản free nếu là OpenRouter)
 // Trả lời được stream dần về trình duyệt; trả về text/plain chứ không phải JSON.
 export const maxDuration = 300;
 
-const BASE_URL_MAC_DINH = "https://integrate.api.nvidia.com/v1";
-const MODEL_MAC_DINH = "google/gemma-4-31b-it";
+/** Nhà cung cấp mặc định theo tiền tố của key. */
+const MAC_DINH = {
+  openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "google/gemma-4-31b-it:free" },
+  nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", model: "google/gemma-4-31b-it" },
+};
 const CAU_HOI_MAC_DINH = "Luận giải tổng quan lá số.";
 const DO_DAI = "Trả lời gọn trong khoảng 400–600 từ; nếu có câu hỏi cụ thể thì tập trung vào câu hỏi đó.";
 const CHO_BAT_DAU = 90_000;
@@ -72,7 +75,14 @@ function docYeuCau(body: unknown): { req: LaSoRequest; cauHoi: string } | null {
 /** Lỗi HTTP từ nhà cung cấp AI -> thông báo cho người dùng. */
 function loiNhaCungCap(status: number, model: string) {
   if (status === 401 || status === 403) return loi("Khoá AI_API_KEY không hợp lệ hoặc hết hạn.", 503);
-  if (status === 404) return loi(`Không tìm thấy model "${model}" — kiểm tra lại biến AI_MODEL.`, 503);
+  if (status === 402) return loi("Tài khoản AI đã hết credit — dùng model miễn phí (:free) hoặc nạp thêm.", 503);
+  if (status === 404) {
+    return loi(
+      `Không dùng được model "${model}" — kiểm tra biến AI_MODEL; với OpenRouter, ` +
+        "vào Settings → Privacy để cho phép các model miễn phí.",
+      503,
+    );
+  }
   if (status === 429) return loi("AI đang quá tải hoặc đã hết lượt miễn phí, vui lòng thử lại sau.", 503);
   return loi("Dịch vụ luận giải AI gặp lỗi, vui lòng thử lại sau.", 502);
 }
@@ -95,8 +105,9 @@ export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "khong-ro";
   if (!conLuot(ip)) return loi(`Bạn đã hỏi AI ${LUOT_MOI_GIO} lần trong 1 giờ qua, vui lòng quay lại sau.`, 429);
 
-  const baseUrl = (process.env.AI_BASE_URL || BASE_URL_MAC_DINH).replace(/\/$/, "");
-  const model = process.env.AI_MODEL || MODEL_MAC_DINH;
+  const macDinh = apiKey.startsWith("sk-or-") ? MAC_DINH.openrouter : MAC_DINH.nvidia;
+  const baseUrl = (process.env.AI_BASE_URL || macDinh.baseUrl).replace(/\/$/, "");
+  const model = process.env.AI_MODEL || macDinh.model;
   // Dịch vụ miễn phí có thể xếp hàng lâu: chờ chữ đầu tiên tối đa CHO_BAT_DAU, sau đó mỗi
   // lần im lặng không quá CHO_GIUA_CHUNG. Chữ được chuyển tiếp ngay cho trình duyệt.
   const ctrl = new AbortController();
@@ -165,8 +176,13 @@ export async function POST(request: Request) {
           for (const d of dong) {
             const payload = d.startsWith("data:") ? d.slice(5).trim() : "";
             if (!payload || payload === "[DONE]") continue;
-            const chunk = (JSON.parse(payload) as { choices?: { delta?: { content?: string | null } }[] })
-              .choices?.[0]?.delta?.content;
+            const goi = JSON.parse(payload) as {
+              choices?: { delta?: { content?: string | null } }[];
+              error?: { message?: string };
+            };
+            // OpenRouter báo lỗi giữa chừng (vd. nhà cung cấp sập) ngay trong stream.
+            if (goi.error) throw new Error(goi.error.message ?? "lỗi trong stream");
+            const chunk = goi.choices?.[0]?.delta?.content;
             if (chunk) {
               coChu = true;
               controller.enqueue(encoder.encode(chunk));
