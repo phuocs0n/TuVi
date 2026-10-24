@@ -1,6 +1,6 @@
 # Triển khai backend lên Render
 
-Frontend chạy trên Vercel (`tuviai.id.vn`). Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
+Frontend chạy trên Vercel (`tuviai.id.vn`) và **tự an lá số ngay trên trình duyệt** (`apps/web/lib/laso/`, bản TypeScript của `packages/laso-engine`), nên trang xem lá số không cần backend. Backend chỉ cần cho **luận giải AI**; khi chưa đặt `NEXT_PUBLIC_API_URL`, mục luận giải báo "chưa được cấu hình". Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
 | Dịch vụ | Vai trò | Địa chỉ |
 |---|---|---|
