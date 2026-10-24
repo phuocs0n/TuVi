@@ -1,15 +1,35 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { LaSo, LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
 import { NextResponse } from "next/server";
 
 import { lapLaSo } from "@/lib/laso/tuvi";
 import { SYSTEM_PROMPT, buildPrompt } from "@/lib/luan-giai/prompt";
 
-// Luận giải chạy ngay trên Vercel (thay cho apps/api + services/ai-engine).
-// Cần biến môi trường ANTHROPIC_API_KEY; LLM_MODEL tuỳ chọn.
+// Luận giải AI chạy ngay trên Vercel, gọi một API chuẩn OpenAI (`/chat/completions`)
+// nên đổi nhà cung cấp chỉ cần đổi biến môi trường:
+//   AI_API_KEY   (bắt buộc) — ví dụ key `nvapi-...` của build.nvidia.com
+//   AI_BASE_URL  (tuỳ chọn) — mặc định NVIDIA; OpenRouter là https://openrouter.ai/api/v1
+//   AI_MODEL     (tuỳ chọn) — mặc định google/gemma-4-31b-it
 export const maxDuration = 120;
 
+const BASE_URL_MAC_DINH = "https://integrate.api.nvidia.com/v1";
+const MODEL_MAC_DINH = "google/gemma-4-31b-it";
 const CAU_HOI_MAC_DINH = "Luận giải tổng quan lá số.";
+
+// Giới hạn lượt theo IP. Bộ đếm nằm trong bộ nhớ của từng máy chủ nên chỉ chặn được spam
+// thông thường, không chính xác tuyệt đối khi Vercel chạy nhiều máy chủ cùng lúc.
+const LUOT_MOI_GIO = 5;
+const MOT_GIO = 60 * 60 * 1000;
+const luotTheoIp = new Map<string, number[]>();
+
+function conLuot(ip: string, now = Date.now()): boolean {
+  if (luotTheoIp.size > 10_000) {
+    for (const [k, ds] of luotTheoIp) if (ds.every((t) => now - t > MOT_GIO)) luotTheoIp.delete(k);
+  }
+  const ds = (luotTheoIp.get(ip) ?? []).filter((t) => now - t < MOT_GIO);
+  if (ds.length >= LUOT_MOI_GIO) return false;
+  luotTheoIp.set(ip, [...ds, now]);
+  return true;
+}
 
 const loi = (detail: string, status: number) => NextResponse.json({ detail }, { status });
 
@@ -44,6 +64,14 @@ function docYeuCau(body: unknown): { req: LaSoRequest; cauHoi: string } | null {
   };
 }
 
+/** Lỗi HTTP từ nhà cung cấp AI -> thông báo cho người dùng. */
+function loiNhaCungCap(status: number, model: string) {
+  if (status === 401 || status === 403) return loi("Khoá AI_API_KEY không hợp lệ hoặc hết hạn.", 503);
+  if (status === 404) return loi(`Không tìm thấy model "${model}" — kiểm tra lại biến AI_MODEL.`, 503);
+  if (status === 429) return loi("AI đang quá tải hoặc đã hết lượt miễn phí, vui lòng thử lại sau.", 503);
+  return loi("Dịch vụ luận giải AI gặp lỗi, vui lòng thử lại sau.", 502);
+}
+
 export async function POST(request: Request) {
   const yeuCau = docYeuCau(await request.json().catch(() => null));
   if (!yeuCau) return loi("Thông tin nhập chưa hợp lệ, vui lòng kiểm tra lại.", 422);
@@ -56,36 +84,44 @@ export async function POST(request: Request) {
     throw e;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) return loi("Tính năng luận giải AI chưa được cấu hình.", 503);
+  const apiKey = process.env.AI_API_KEY;
+  if (!apiKey) return loi("Tính năng luận giải AI chưa được cấu hình.", 503);
 
-  const client = new Anthropic();
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "khong-ro";
+  if (!conLuot(ip)) return loi(`Bạn đã hỏi AI ${LUOT_MOI_GIO} lần trong 1 giờ qua, vui lòng quay lại sau.`, 429);
+
+  const baseUrl = (process.env.AI_BASE_URL || BASE_URL_MAC_DINH).replace(/\/$/, "");
+  const model = process.env.AI_MODEL || MODEL_MAC_DINH;
+  let res: Response;
   try {
-    const msg = await client.beta.messages.create({
-      model: process.env.LLM_MODEL || "claude-sonnet-5-5",
-      max_tokens: 16000,
-      output_config: { effort: "medium" },
-      // Khi model từ chối vì bộ lọc an toàn, API tự chạy lại trên model dự phòng
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) }],
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) },
+        ],
+      }),
+      signal: AbortSignal.timeout(100_000),
     });
-    if (msg.stop_reason === "refusal") {
-      return loi("AI không thể luận giải câu hỏi này, vui lòng hỏi theo cách khác.", 502);
-    }
-    const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    return NextResponse.json({ la_so: laSo, luan_giai: text } satisfies LuanGiaiResponse);
   } catch (e) {
-    console.error("[luan-giai] Gọi Claude thất bại:", e);
-    if (e instanceof Anthropic.AuthenticationError) {
-      return loi("Khoá ANTHROPIC_API_KEY không hợp lệ.", 503);
-    }
-    if (e instanceof Anthropic.RateLimitError) {
-      return loi("AI đang quá tải, vui lòng thử lại sau ít phút.", 503);
-    }
-    if (e instanceof Anthropic.APIError) {
-      return loi("Dịch vụ luận giải AI gặp lỗi, vui lòng thử lại sau.", 502);
-    }
-    throw e;
+    console.error(`[luan-giai] Không gọi được ${baseUrl}:`, e);
+    const hetGio = e instanceof DOMException && e.name === "TimeoutError";
+    return loi(hetGio ? "AI phản hồi quá lâu, vui lòng thử lại." : "Không kết nối được dịch vụ AI.", 504);
   }
+  if (!res.ok) {
+    console.error(`[luan-giai] ${baseUrl} trả về ${res.status}:`, await res.text().catch(() => ""));
+    return loiNhaCungCap(res.status, model);
+  }
+
+  const data = (await res.json().catch(() => null)) as {
+    choices?: { message?: { content?: string | null } }[];
+  } | null;
+  // Một số model suy luận trả kèm phần nháp trong <think>…</think>; bỏ đi trước khi hiển thị.
+  const text = (data?.choices?.[0]?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  if (!text) return loi("AI không trả về nội dung, vui lòng thử lại.", 502);
+  return NextResponse.json({ la_so: laSo, luan_giai: text } satisfies LuanGiaiResponse);
 }

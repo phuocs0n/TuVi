@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { HoiAI } from "@/components/HoiAI";
 import { LaSoChart } from "@/components/LaSoChart";
 import { LuanGiai } from "@/components/LuanGiai";
 import { ApiError, lapLaSo } from "@/lib/api";
@@ -62,6 +63,7 @@ export function LaSoView() {
       </div>
       <LaSoChart laSo={laSo} />
       <LuanGiai laSo={laSo} />
+      <HoiAI req={req} />
     </>
   );
 }

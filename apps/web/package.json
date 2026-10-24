@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.3.0",
     "@tuvi/shared-types": "workspace:*",
     "next": "^15.1.0",
     "react": "^19.0.0",
