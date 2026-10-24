@@ -8,11 +8,11 @@ Frontend chạy trên Vercel (`tuviai.id.vn`) và **không cần backend**:
 
   | Biến | Bắt buộc | Mặc định / ví dụ |
   |---|---|---|
-  | `AI_API_KEY` | có | key `nvapi-...` (NVIDIA) hoặc `sk-or-...` (OpenRouter) |
-  | `AI_BASE_URL` | không | `https://integrate.api.nvidia.com/v1`; OpenRouter: `https://openrouter.ai/api/v1` |
-  | `AI_MODEL` | không | `google/gemma-4-31b-it`; OpenRouter free: `google/gemma-4-31b-it:free` |
+  | `AI_API_KEY` | có | key `sk-or-...` (OpenRouter) hoặc `nvapi-...` (NVIDIA) |
+  | `AI_BASE_URL` | không | suy ra từ key: `https://openrouter.ai/api/v1` hoặc `https://integrate.api.nvidia.com/v1` |
+  | `AI_MODEL` | không | OpenRouter: `google/gemma-4-31b-it:free`; NVIDIA: `google/gemma-4-31b-it` |
 
-  Chưa có key thì ô Hỏi AI báo "chưa được cấu hình", phần còn lại vẫn chạy. Mỗi IP được hỏi 5 lần/giờ.
+  Chỉ cần đặt `AI_API_KEY`; route tự chọn nhà cung cấp và model theo tiền tố key. Chưa có key thì ô Hỏi AI báo "chưa được cấu hình", phần còn lại vẫn chạy. Mỗi IP được hỏi 5 lần/giờ. Model `:free` của OpenRouter giới hạn 50 lượt/ngày cho cả tài khoản (1.000 lượt/ngày nếu từng nạp ≥ $10); nếu báo không dùng được model, vào OpenRouter → Settings → Privacy cho phép model miễn phí.
 
 Phần dưới đây chỉ cần nếu muốn chạy riêng API Python trên Render. Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
