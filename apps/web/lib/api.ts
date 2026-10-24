@@ -12,19 +12,23 @@ export class ApiError extends Error {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
+  const url = `${API_URL}${path}`;
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch {
-    throw new ApiError("Không kết nối được máy chủ. Vui lòng thử lại sau.", 0);
+  } catch (e) {
+    // fetch chỉ ném lỗi khi không tới được máy chủ (sai URL, máy chủ tắt, bị CORS chặn…)
+    console.error(`[api] POST ${url} thất bại:`, e);
+    throw new ApiError(`Không kết nối được máy chủ (${url}). Vui lòng thử lại sau.`, 0);
   }
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ApiError(errorMessage(data) ?? `Lỗi máy chủ (${res.status})`, res.status);
+    console.error(`[api] POST ${url} trả về ${res.status}:`, data);
+    throw new ApiError(errorMessage(data) ?? `Lỗi máy chủ (${res.status}) tại ${url}`, res.status);
   }
   return data as T;
 }
