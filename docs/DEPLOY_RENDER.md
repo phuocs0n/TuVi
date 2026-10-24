@@ -3,7 +3,16 @@
 Frontend chạy trên Vercel (`tuviai.id.vn`) và **không cần backend**:
 
 - Lá số được an ngay trên trình duyệt (`apps/web/lib/laso/`, bản TypeScript của `packages/laso-engine`).
-- Luận giải AI chạy ở route `apps/web/app/api/luan-giai` trên Vercel (gọi thẳng Claude). Chỉ cần vào Vercel → project `tu-vi` → **Settings → Environment Variables**, thêm `ANTHROPIC_API_KEY` (tuỳ chọn `LLM_MODEL`, mặc định `claude-sonnet-5-5`) rồi **Redeploy**. Chưa có key thì mục luận giải báo "chưa được cấu hình", lá số vẫn xem bình thường.
+- Luận giải theo quy tắc (`apps/web/lib/luan-giai/`) cũng chạy trên trình duyệt, miễn phí, không cần cấu hình.
+- Ô **"Hỏi AI"** gọi route `apps/web/app/api/luan-giai` trên Vercel. Route dùng API chuẩn OpenAI (`/chat/completions`) nên chạy được với NVIDIA build.nvidia.com, OpenRouter… Vào Vercel → project `tu-vi` → **Settings → Environment Variables**, thêm rồi **Redeploy**:
+
+  | Biến | Bắt buộc | Mặc định / ví dụ |
+  |---|---|---|
+  | `AI_API_KEY` | có | key `nvapi-...` (NVIDIA) hoặc `sk-or-...` (OpenRouter) |
+  | `AI_BASE_URL` | không | `https://integrate.api.nvidia.com/v1`; OpenRouter: `https://openrouter.ai/api/v1` |
+  | `AI_MODEL` | không | `google/gemma-4-31b-it`; OpenRouter free: `google/gemma-4-31b-it:free` |
+
+  Chưa có key thì ô Hỏi AI báo "chưa được cấu hình", phần còn lại vẫn chạy. Mỗi IP được hỏi 5 lần/giờ.
 
 Phần dưới đây chỉ cần nếu muốn chạy riêng API Python trên Render. Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
