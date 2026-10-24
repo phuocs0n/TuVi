@@ -1,6 +1,11 @@
 # Triển khai backend lên Render
 
-Frontend chạy trên Vercel (`tuviai.id.vn`) và **tự an lá số ngay trên trình duyệt** (`apps/web/lib/laso/`, bản TypeScript của `packages/laso-engine`), nên trang xem lá số không cần backend. Backend chỉ cần cho **luận giải AI**; khi chưa đặt `NEXT_PUBLIC_API_URL`, mục luận giải báo "chưa được cấu hình". Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
+Frontend chạy trên Vercel (`tuviai.id.vn`) và **không cần backend**:
+
+- Lá số được an ngay trên trình duyệt (`apps/web/lib/laso/`, bản TypeScript của `packages/laso-engine`).
+- Luận giải AI chạy ở route `apps/web/app/api/luan-giai` trên Vercel (gọi thẳng Claude). Chỉ cần vào Vercel → project `tu-vi` → **Settings → Environment Variables**, thêm `ANTHROPIC_API_KEY` (tuỳ chọn `LLM_MODEL`, mặc định `claude-sonnet-5-5`) rồi **Redeploy**. Chưa có key thì mục luận giải báo "chưa được cấu hình", lá số vẫn xem bình thường.
+
+Phần dưới đây chỉ cần nếu muốn chạy riêng API Python trên Render. Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
 | Dịch vụ | Vai trò | Địa chỉ |
 |---|---|---|
@@ -15,15 +20,9 @@ Frontend chạy trên Vercel (`tuviai.id.vn`) và **tự an lá số ngay trên 
 
 > Tên dịch vụ có thể bị Render thêm hậu tố nếu `tuvi-api` đã có người dùng; hãy lấy URL thật trong trang dịch vụ.
 
-## 2. Trỏ frontend về API
+## 2. Frontend
 
-Vercel → project `tu-vi` → **Settings → Environment Variables**:
-
-| Biến | Giá trị |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | URL của `tuvi-api` trên Render, ví dụ `https://tuvi-api.onrender.com` |
-
-Sau khi lưu, vào **Deployments → Redeploy** (biến `NEXT_PUBLIC_*` được nhúng lúc build nên bắt buộc build lại).
+Web trên Vercel không gọi API Render nữa (lá số tính trên trình duyệt, luận giải chạy ở `app/api/luan-giai`), nên **không cần** đặt `NEXT_PUBLIC_API_URL`. API Render vẫn dùng được cho ứng dụng khác gọi trực tiếp.
 
 API cho phép CORS từ `tuviai.id.vn`, `www.tuviai.id.vn` và mọi `*.vercel.app` (bản Preview).
 
@@ -31,8 +30,7 @@ API cho phép CORS từ `tuviai.id.vn`, `www.tuviai.id.vn` và mọi `*.vercel.a
 
 1. Render → `tuvi-api` → **Settings → Custom Domains → Add** `api.tuviai.id.vn`; Render hiển thị giá trị CNAME.
 2. ZoneDNS: thêm record `api` loại `CNAME` trỏ về giá trị đó.
-3. Đổi `NEXT_PUBLIC_API_URL` thành `https://api.tuviai.id.vn` và build lại frontend.
-4. Thêm `"api.$DOMAIN"` vào `HOSTS` trong `scripts/check-domain.sh`.
+3. Thêm `"api.$DOMAIN"` vào `HOSTS` trong `scripts/check-domain.sh`.
 
 ## Lưu ý gói Free
 
