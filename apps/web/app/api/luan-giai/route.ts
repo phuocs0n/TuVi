@@ -1,4 +1,4 @@
-import type { LaSo, LaSoRequest, LuanGiaiResponse } from "@tuvi/shared-types";
+import type { LaSo, LaSoRequest } from "@tuvi/shared-types";
 import { NextResponse } from "next/server";
 
 import { lapLaSo } from "@/lib/laso/tuvi";
@@ -9,11 +9,16 @@ import { SYSTEM_PROMPT, buildPrompt } from "@/lib/luan-giai/prompt";
 //   AI_API_KEY   (bắt buộc) — ví dụ key `nvapi-...` của build.nvidia.com
 //   AI_BASE_URL  (tuỳ chọn) — mặc định NVIDIA; OpenRouter là https://openrouter.ai/api/v1
 //   AI_MODEL     (tuỳ chọn) — mặc định google/gemma-4-31b-it
-export const maxDuration = 120;
+// Trả lời được stream dần về trình duyệt; trả về text/plain chứ không phải JSON.
+export const maxDuration = 300;
 
 const BASE_URL_MAC_DINH = "https://integrate.api.nvidia.com/v1";
 const MODEL_MAC_DINH = "google/gemma-4-31b-it";
 const CAU_HOI_MAC_DINH = "Luận giải tổng quan lá số.";
+const DO_DAI = "Trả lời gọn trong khoảng 400–600 từ; nếu có câu hỏi cụ thể thì tập trung vào câu hỏi đó.";
+const CHO_BAT_DAU = 90_000;
+const CHO_GIUA_CHUNG = 45_000;
+const HEADER_STREAM = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
 
 // Giới hạn lượt theo IP. Bộ đếm nằm trong bộ nhớ của từng máy chủ nên chỉ chặn được spam
 // thông thường, không chính xác tuyệt đối khi Vercel chạy nhiều máy chủ cùng lúc.
@@ -92,6 +97,15 @@ export async function POST(request: Request) {
 
   const baseUrl = (process.env.AI_BASE_URL || BASE_URL_MAC_DINH).replace(/\/$/, "");
   const model = process.env.AI_MODEL || MODEL_MAC_DINH;
+  // Dịch vụ miễn phí có thể xếp hàng lâu: chờ chữ đầu tiên tối đa CHO_BAT_DAU, sau đó mỗi
+  // lần im lặng không quá CHO_GIUA_CHUNG. Chữ được chuyển tiếp ngay cho trình duyệt.
+  const ctrl = new AbortController();
+  let hetGio = setTimeout(() => ctrl.abort(), CHO_BAT_DAU);
+  const giaHan = () => {
+    clearTimeout(hetGio);
+    hetGio = setTimeout(() => ctrl.abort(), CHO_GIUA_CHUNG);
+  };
+
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/chat/completions`, {
@@ -99,29 +113,79 @@ export async function POST(request: Request) {
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
+        max_tokens: 2048,
+        stream: true,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: `${SYSTEM_PROMPT} ${DO_DAI}` },
           { role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) },
         ],
       }),
-      signal: AbortSignal.timeout(100_000),
+      signal: ctrl.signal,
     });
   } catch (e) {
+    clearTimeout(hetGio);
     console.error(`[luan-giai] Không gọi được ${baseUrl}:`, e);
-    const hetGio = e instanceof DOMException && e.name === "TimeoutError";
-    return loi(hetGio ? "AI phản hồi quá lâu, vui lòng thử lại." : "Không kết nối được dịch vụ AI.", 504);
+    return ctrl.signal.aborted
+      ? loi("AI đang quá tải, chưa phản hồi sau 90 giây. Vui lòng thử lại sau ít phút.", 504)
+      : loi("Không kết nối được dịch vụ AI.", 504);
   }
-  if (!res.ok) {
+  if (!res.ok || !res.body) {
+    clearTimeout(hetGio);
     console.error(`[luan-giai] ${baseUrl} trả về ${res.status}:`, await res.text().catch(() => ""));
     return loiNhaCungCap(res.status, model);
   }
+  giaHan();
 
-  const data = (await res.json().catch(() => null)) as {
-    choices?: { message?: { content?: string | null } }[];
-  } | null;
-  // Một số model suy luận trả kèm phần nháp trong <think>…</think>; bỏ đi trước khi hiển thị.
-  const text = (data?.choices?.[0]?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  if (!text) return loi("AI không trả về nội dung, vui lòng thử lại.", 502);
-  return NextResponse.json({ la_so: laSo, luan_giai: text } satisfies LuanGiaiResponse);
+  // Nhà cung cấp không hỗ trợ stream thì trả nguyên JSON một lần.
+  if (!res.headers.get("content-type")?.includes("text/event-stream")) {
+    clearTimeout(hetGio);
+    const data = (await res.json().catch(() => null)) as {
+      choices?: { message?: { content?: string | null } }[];
+    } | null;
+    const text = data?.choices?.[0]?.message?.content?.trim();
+    if (!text) return loi("AI không trả về nội dung, vui lòng thử lại.", 502);
+    return new Response(text, { headers: HEADER_STREAM });
+  }
+
+  const nguon = res.body.getReader();
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let dem = "";
+      let coChu = false;
+      try {
+        for (;;) {
+          const { done, value } = await nguon.read();
+          if (done) break;
+          giaHan();
+          dem += decoder.decode(value, { stream: true });
+          const dong = dem.split("\n");
+          dem = dong.pop() ?? "";
+          for (const d of dong) {
+            const payload = d.startsWith("data:") ? d.slice(5).trim() : "";
+            if (!payload || payload === "[DONE]") continue;
+            const chunk = (JSON.parse(payload) as { choices?: { delta?: { content?: string | null } }[] })
+              .choices?.[0]?.delta?.content;
+            if (chunk) {
+              coChu = true;
+              controller.enqueue(encoder.encode(chunk));
+            }
+          }
+        }
+        if (!coChu) controller.enqueue(encoder.encode("⚠️ AI không trả về nội dung, vui lòng thử lại."));
+      } catch (e) {
+        console.error("[luan-giai] Stream bị ngắt:", e);
+        controller.enqueue(encoder.encode("\n\n⚠️ AI bị ngắt giữa chừng, vui lòng thử lại."));
+      } finally {
+        clearTimeout(hetGio);
+        controller.close();
+      }
+    },
+    cancel() {
+      clearTimeout(hetGio);
+      ctrl.abort();
+    },
+  });
+  return new Response(stream, { headers: HEADER_STREAM });
 }
