@@ -10,9 +10,9 @@ Frontend chạy trên Vercel (`tuviai.id.vn`) và **không cần backend**:
   |---|---|---|
   | `AI_API_KEY` | có | key `sk-or-...` (OpenRouter) hoặc `nvapi-...` (NVIDIA) |
   | `AI_BASE_URL` | không | suy ra từ key: `https://openrouter.ai/api/v1` hoặc `https://integrate.api.nvidia.com/v1` |
-  | `AI_MODEL` | không | OpenRouter: `google/gemma-4-31b-it:free`; NVIDIA: `google/gemma-4-31b-it` |
+  | `AI_MODEL` | không | một model hoặc danh sách cách nhau bởi dấu phẩy. Mặc định OpenRouter: `nvidia/nemotron-3-ultra-550b-a55b:free,nvidia/nemotron-3.5-super-vl:free,google/gemma-4-31b-it:free`; NVIDIA: `google/gemma-4-31b-it` |
 
-  Chỉ cần đặt `AI_API_KEY`; route tự chọn nhà cung cấp và model theo tiền tố key. Chưa có key thì ô Hỏi AI báo "chưa được cấu hình", phần còn lại vẫn chạy. Mỗi IP được hỏi 5 lần/giờ. Model `:free` của OpenRouter giới hạn 50 lượt/ngày cho cả tài khoản (1.000 lượt/ngày nếu từng nạp ≥ $10); nếu báo không dùng được model, vào OpenRouter → Settings → Privacy cho phép model miễn phí.
+  Chỉ cần đặt `AI_API_KEY`; route tự chọn nhà cung cấp và danh sách model theo tiền tố key. Model nào báo lỗi hoặc chưa bắt đầu trả lời sau 40 giây thì tự chuyển sang model kế (model cuối được chờ 90 giây); log Vercel ghi model nào đã trả lời. Chưa có key thì ô Hỏi AI báo "chưa được cấu hình", phần còn lại vẫn chạy. Mỗi IP được hỏi 5 lần/giờ. Model `:free` của OpenRouter giới hạn 50 lượt/ngày cho cả tài khoản (1.000 lượt/ngày nếu từng nạp ≥ $10); nếu báo không dùng được model, vào OpenRouter → Settings → Privacy cho phép model miễn phí.
 
 Phần dưới đây chỉ cần nếu muốn chạy riêng API Python trên Render. Backend gồm 2 dịch vụ Docker chạy trên **Render** (gói Free, vùng Singapore), khai báo trong `render.yaml`:
 
