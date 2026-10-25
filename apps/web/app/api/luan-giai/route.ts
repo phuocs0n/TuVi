@@ -8,19 +8,32 @@ import { SYSTEM_PROMPT, buildPrompt } from "@/lib/luan-giai/prompt";
 // nên đổi nhà cung cấp chỉ cần đổi biến môi trường:
 //   AI_API_KEY   (bắt buộc) — key OpenRouter `sk-or-...` hoặc NVIDIA `nvapi-...`
 //   AI_BASE_URL  (tuỳ chọn) — mặc định suy ra từ loại key
-//   AI_MODEL     (tuỳ chọn) — mặc định Gemma 4 31B (bản free nếu là OpenRouter)
+//   AI_MODEL     (tuỳ chọn) — một model hoặc danh sách cách nhau bởi dấu phẩy; model đầu
+//                lỗi hoặc nghẽn thì tự chuyển sang model kế tiếp
 // Trả lời được stream dần về trình duyệt; trả về text/plain chứ không phải JSON.
 export const maxDuration = 300;
 
-/** Nhà cung cấp mặc định theo tiền tố của key. */
+/** Nhà cung cấp và danh sách model dự phòng mặc định, chọn theo tiền tố của key. */
 const MAC_DINH = {
-  openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "google/gemma-4-31b-it:free" },
-  nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", model: "google/gemma-4-31b-it" },
+  openrouter: {
+    baseUrl: "https://openrouter.ai/api/v1",
+    models: [
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "nvidia/nemotron-3.5-super-vl:free",
+      "google/gemma-4-31b-it:free",
+    ],
+  },
+  nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", models: ["google/gemma-4-31b-it"] },
 };
 const CAU_HOI_MAC_DINH = "Luận giải tổng quan lá số.";
 const DO_DAI = "Trả lời gọn trong khoảng 400–600 từ; nếu có câu hỏi cụ thể thì tập trung vào câu hỏi đó.";
-const CHO_BAT_DAU = 90_000;
+// Model chưa bắt đầu trả lời (chữ hoặc phần suy luận) sau CHO_BAT_DAU thì chuyển model kế;
+// model cuối được chờ lâu hơn. Đã bắt đầu thì mỗi lần im lặng không quá CHO_GIUA_CHUNG.
+const CHO_BAT_DAU = 40_000;
+const CHO_BAT_DAU_CUOI = 90_000;
 const CHO_GIUA_CHUNG = 45_000;
+// Không thử model mới khi đã quá mốc này, để còn thời gian viết trước khi hết maxDuration.
+const NGUNG_THU_SAU = 200_000;
 const HEADER_STREAM = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
 
 // Giới hạn lượt theo IP. Bộ đếm nằm trong bộ nhớ của từng máy chủ nên chỉ chặn được spam
@@ -106,87 +119,150 @@ export async function POST(request: Request) {
   if (!conLuot(ip)) return loi(`Bạn đã hỏi AI ${LUOT_MOI_GIO} lần trong 1 giờ qua, vui lòng quay lại sau.`, 429);
 
   const macDinh = apiKey.startsWith("sk-or-") ? MAC_DINH.openrouter : MAC_DINH.nvidia;
-  const baseUrl = (process.env.AI_BASE_URL || macDinh.baseUrl).replace(/\/$/, "");
-  const model = process.env.AI_MODEL || macDinh.model;
-  // Dịch vụ miễn phí có thể xếp hàng lâu: chờ chữ đầu tiên tối đa CHO_BAT_DAU, sau đó mỗi
-  // lần im lặng không quá CHO_GIUA_CHUNG. Chữ được chuyển tiếp ngay cho trình duyệt.
+  const url = `${(process.env.AI_BASE_URL || macDinh.baseUrl).replace(/\/$/, "")}/chat/completions`;
+  const tuBien = (process.env.AI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean);
+  const danhSach = tuBien.length ? tuBien : macDinh.models;
+  const body = {
+    max_tokens: 2048,
+    stream: true,
+    messages: [
+      { role: "system", content: `${SYSTEM_PROMPT} ${DO_DAI}` },
+      { role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) },
+    ],
+  };
+
+  const batDau = Date.now();
+  let loiCuoi: LoiThu = "mat-ket-noi";
+  for (const [i, model] of danhSach.entries()) {
+    if (i > 0 && Date.now() - batDau > NGUNG_THU_SAU) break;
+    const cuoi = i === danhSach.length - 1;
+    const kq = await thuModel(url, apiKey, { ...body, model }, cuoi ? CHO_BAT_DAU_CUOI : CHO_BAT_DAU);
+    if (kq.kind === "xong") return new Response(kq.text, { headers: HEADER_STREAM });
+    if (kq.kind === "chay") {
+      console.info(`[luan-giai] Trả lời bằng ${model}`);
+      return new Response(chuyenTiep(kq), { headers: HEADER_STREAM });
+    }
+    loiCuoi = kq.loi;
+    // Key sai thì model nào cũng bị từ chối như nhau, thử tiếp vô ích.
+    if (kq.loi === 401 || kq.loi === 403) break;
+  }
+  if (loiCuoi === "het-gio") {
+    return loi("AI đang quá tải, các model đều chưa phản hồi. Vui lòng thử lại sau ít phút.", 504);
+  }
+  if (loiCuoi === "mat-ket-noi") return loi("Không kết nối được dịch vụ AI.", 504);
+  if (loiCuoi === "rong") return loi("AI không trả về nội dung, vui lòng thử lại.", 502);
+  return loiNhaCungCap(loiCuoi, danhSach.join(", "));
+}
+
+type GoiSse = {
+  choices?: {
+    delta?: { content?: string | null; reasoning?: string | null; reasoning_content?: string | null };
+  }[];
+  error?: { message?: string };
+};
+
+/** Mã HTTP lỗi, hoặc: hết giờ chờ, mất kết nối, trả về rỗng. */
+type LoiThu = number | "het-gio" | "mat-ket-noi" | "rong";
+
+type KetQuaThu =
+  | { kind: "chay"; dau: string; tiep: AsyncGenerator<GoiSse>; ctrl: AbortController }
+  | { kind: "xong"; text: string }
+  | { kind: "loi"; loi: LoiThu };
+
+/** Đọc từng gói `data:` của stream SSE; bỏ qua dòng giữ kết nối (`: ...`). */
+async function* docSse(body: ReadableStream<Uint8Array>): AsyncGenerator<GoiSse> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let dem = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      dem += decoder.decode(value, { stream: true });
+      const dong = dem.split("\n");
+      dem = dong.pop() ?? "";
+      for (const d of dong) {
+        const payload = d.startsWith("data:") ? d.slice(5).trim() : "";
+        if (!payload) continue;
+        if (payload === "[DONE]") return;
+        const goi = JSON.parse(payload) as GoiSse;
+        // OpenRouter báo lỗi giữa chừng (vd. nhà cung cấp sập) ngay trong stream.
+        if (goi.error) throw new Error(goi.error.message ?? "lỗi trong stream");
+        yield goi;
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
+/** Gọi một model và chờ tới khi nó bắt đầu trả lời (chữ hoặc phần suy luận), tối đa `choBatDau`. */
+async function thuModel(url: string, apiKey: string, body: object, choBatDau: number): Promise<KetQuaThu> {
+  const model = (body as { model: string }).model;
   const ctrl = new AbortController();
-  let hetGio = setTimeout(() => ctrl.abort(), CHO_BAT_DAU);
+  const hetGio = setTimeout(() => ctrl.abort(), choBatDau);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) {
+      const chiTiet = await res.text().catch(() => "");
+      console.warn(`[luan-giai] ${model} trả về ${res.status}:`, chiTiet.slice(0, 300));
+      return { kind: "loi", loi: res.status };
+    }
+    // Nhà cung cấp không hỗ trợ stream thì nhận nguyên JSON một lần.
+    if (!res.headers.get("content-type")?.includes("text/event-stream")) {
+      const data = (await res.json().catch(() => null)) as {
+        choices?: { message?: { content?: string | null } }[];
+      } | null;
+      const text = data?.choices?.[0]?.message?.content?.trim();
+      return text ? { kind: "xong", text } : { kind: "loi", loi: "rong" };
+    }
+    const tiep = docSse(res.body);
+    for (;;) {
+      const r = await tiep.next();
+      if (r.done) {
+        console.warn(`[luan-giai] ${model} kết thúc mà không trả lời`);
+        return { kind: "loi", loi: "rong" };
+      }
+      const delta = r.value.choices?.[0]?.delta;
+      if (delta?.content) return { kind: "chay", dau: delta.content, tiep, ctrl };
+      if (delta?.reasoning || delta?.reasoning_content) return { kind: "chay", dau: "", tiep, ctrl };
+    }
+  } catch (e) {
+    const loiThu = ctrl.signal.aborted ? "het-gio" : "mat-ket-noi";
+    console.warn(`[luan-giai] ${model}: ${loiThu}`, e);
+    return { kind: "loi", loi: loiThu };
+  } finally {
+    clearTimeout(hetGio);
+  }
+}
+
+/** Chuyển tiếp phần chữ của model đã bắt đầu trả lời về trình duyệt. */
+function chuyenTiep({ dau, tiep, ctrl }: Extract<KetQuaThu, { kind: "chay" }>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let hetGio: ReturnType<typeof setTimeout> | undefined;
   const giaHan = () => {
     clearTimeout(hetGio);
     hetGio = setTimeout(() => ctrl.abort(), CHO_GIUA_CHUNG);
   };
-
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2048,
-        stream: true,
-        messages: [
-          { role: "system", content: `${SYSTEM_PROMPT} ${DO_DAI}` },
-          { role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) },
-        ],
-      }),
-      signal: ctrl.signal,
-    });
-  } catch (e) {
-    clearTimeout(hetGio);
-    console.error(`[luan-giai] Không gọi được ${baseUrl}:`, e);
-    return ctrl.signal.aborted
-      ? loi("AI đang quá tải, chưa phản hồi sau 90 giây. Vui lòng thử lại sau ít phút.", 504)
-      : loi("Không kết nối được dịch vụ AI.", 504);
-  }
-  if (!res.ok || !res.body) {
-    clearTimeout(hetGio);
-    console.error(`[luan-giai] ${baseUrl} trả về ${res.status}:`, await res.text().catch(() => ""));
-    return loiNhaCungCap(res.status, model);
-  }
-  giaHan();
-
-  // Nhà cung cấp không hỗ trợ stream thì trả nguyên JSON một lần.
-  if (!res.headers.get("content-type")?.includes("text/event-stream")) {
-    clearTimeout(hetGio);
-    const data = (await res.json().catch(() => null)) as {
-      choices?: { message?: { content?: string | null } }[];
-    } | null;
-    const text = data?.choices?.[0]?.message?.content?.trim();
-    if (!text) return loi("AI không trả về nội dung, vui lòng thử lại.", 502);
-    return new Response(text, { headers: HEADER_STREAM });
-  }
-
-  const nguon = res.body.getReader();
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
+  return new ReadableStream<Uint8Array>({
     async start(controller) {
-      let dem = "";
-      let coChu = false;
+      let coChu = Boolean(dau);
+      if (dau) controller.enqueue(encoder.encode(dau));
+      giaHan();
       try {
         for (;;) {
-          const { done, value } = await nguon.read();
-          if (done) break;
+          const r = await tiep.next();
+          if (r.done) break;
           giaHan();
-          dem += decoder.decode(value, { stream: true });
-          const dong = dem.split("\n");
-          dem = dong.pop() ?? "";
-          for (const d of dong) {
-            const payload = d.startsWith("data:") ? d.slice(5).trim() : "";
-            if (!payload || payload === "[DONE]") continue;
-            const goi = JSON.parse(payload) as {
-              choices?: { delta?: { content?: string | null } }[];
-              error?: { message?: string };
-            };
-            // OpenRouter báo lỗi giữa chừng (vd. nhà cung cấp sập) ngay trong stream.
-            if (goi.error) throw new Error(goi.error.message ?? "lỗi trong stream");
-            const chunk = goi.choices?.[0]?.delta?.content;
-            if (chunk) {
-              coChu = true;
-              controller.enqueue(encoder.encode(chunk));
-            }
+          const chunk = r.value.choices?.[0]?.delta?.content;
+          if (chunk) {
+            coChu = true;
+            controller.enqueue(encoder.encode(chunk));
           }
         }
         if (!coChu) controller.enqueue(encoder.encode("⚠️ AI không trả về nội dung, vui lòng thử lại."));
@@ -203,5 +279,4 @@ export async function POST(request: Request) {
       ctrl.abort();
     },
   });
-  return new Response(stream, { headers: HEADER_STREAM });
 }
