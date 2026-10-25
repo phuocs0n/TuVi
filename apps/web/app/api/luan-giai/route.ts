@@ -17,10 +17,11 @@ export const maxDuration = 300;
 const MAC_DINH = {
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
+    // Gemma 4 viết tiếng Việt sạch nhất nên đứng đầu; Nemotron làm dự phòng.
     models: [
+      "google/gemma-4-31b-it:free",
       "nvidia/nemotron-3-ultra-550b-a55b:free",
       "nvidia/nemotron-3.5-super-vl:free",
-      "google/gemma-4-31b-it:free",
     ],
   },
   nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", models: ["google/gemma-4-31b-it"] },
