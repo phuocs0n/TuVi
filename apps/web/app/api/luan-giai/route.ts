@@ -26,7 +26,9 @@ const MAC_DINH = {
   nvidia: { baseUrl: "https://integrate.api.nvidia.com/v1", models: ["google/gemma-4-31b-it"] },
 };
 const CAU_HOI_MAC_DINH = "Luận giải tổng quan lá số.";
-const DO_DAI = "Trả lời gọn trong khoảng 400–600 từ; nếu có câu hỏi cụ thể thì tập trung vào câu hỏi đó.";
+const YEU_CAU_VIET =
+  "Trả lời gọn trong khoảng 400–600 từ; nếu có câu hỏi cụ thể thì tập trung vào câu hỏi đó. " +
+  "Chỉ viết tiếng Việt có dấu, không chèn chữ Hán, chữ nước ngoài hay ký tự lạ.";
 // Model chưa bắt đầu trả lời (chữ hoặc phần suy luận) sau CHO_BAT_DAU thì chuyển model kế;
 // model cuối được chờ lâu hơn. Đã bắt đầu thì mỗi lần im lặng không quá CHO_GIUA_CHUNG.
 const CHO_BAT_DAU = 40_000;
@@ -34,6 +36,8 @@ const CHO_BAT_DAU_CUOI = 90_000;
 const CHO_GIUA_CHUNG = 45_000;
 // Không thử model mới khi đã quá mốc này, để còn thời gian viết trước khi hết maxDuration.
 const NGUNG_THU_SAU = 200_000;
+// Tự dừng (có báo) trước khi Vercel cắt ở maxDuration = 300 giây.
+const HAN_CHOT = 285_000;
 const HEADER_STREAM = { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" };
 
 // Giới hạn lượt theo IP. Bộ đếm nằm trong bộ nhớ của từng máy chủ nên chỉ chặn được spam
@@ -123,10 +127,13 @@ export async function POST(request: Request) {
   const tuBien = (process.env.AI_MODEL ?? "").split(",").map((m) => m.trim()).filter(Boolean);
   const danhSach = tuBien.length ? tuBien : macDinh.models;
   const body = {
-    max_tokens: 2048,
+    // Đủ chỗ cho cả phần suy luận (cũng tính vào max_tokens) của model như Nemotron.
+    max_tokens: 8192,
     stream: true,
+    // OpenRouter: giảm suy luận để chữ ra sớm hơn; model không suy luận thì bỏ qua tham số này.
+    ...(url.includes("openrouter.ai") ? { reasoning: { effort: "low" } } : {}),
     messages: [
-      { role: "system", content: `${SYSTEM_PROMPT} ${DO_DAI}` },
+      { role: "system", content: `${SYSTEM_PROMPT} ${YEU_CAU_VIET}` },
       { role: "user", content: buildPrompt(laSo, [], yeuCau.cauHoi) },
     ],
   };
@@ -140,7 +147,7 @@ export async function POST(request: Request) {
     if (kq.kind === "xong") return new Response(kq.text, { headers: HEADER_STREAM });
     if (kq.kind === "chay") {
       console.info(`[luan-giai] Trả lời bằng ${model}`);
-      return new Response(chuyenTiep(kq), { headers: HEADER_STREAM });
+      return new Response(chuyenTiep(kq, batDau + HAN_CHOT), { headers: HEADER_STREAM });
     }
     loiCuoi = kq.loi;
     // Key sai thì model nào cũng bị từ chối như nhau, thử tiếp vô ích.
@@ -157,6 +164,7 @@ export async function POST(request: Request) {
 type GoiSse = {
   choices?: {
     delta?: { content?: string | null; reasoning?: string | null; reasoning_content?: string | null };
+    finish_reason?: string | null;
   }[];
   error?: { message?: string };
 };
@@ -241,10 +249,24 @@ async function thuModel(url: string, apiKey: string, body: object, choBatDau: nu
   }
 }
 
-/** Chuyển tiếp phần chữ của model đã bắt đầu trả lời về trình duyệt. */
-function chuyenTiep({ dau, tiep, ctrl }: Extract<KetQuaThu, { kind: "chay" }>): ReadableStream<Uint8Array> {
+/**
+ * Chuyển tiếp phần chữ của model đã bắt đầu trả lời về trình duyệt. Bài bị cắt (do giới hạn
+ * độ dài, im lặng quá lâu hoặc tới `hanChot`) thì nối thêm một dòng báo cho người đọc biết.
+ */
+function chuyenTiep(
+  { dau, tiep, ctrl }: Extract<KetQuaThu, { kind: "chay" }>,
+  hanChot: number,
+): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let hetGio: ReturnType<typeof setTimeout> | undefined;
+  let quaHan = false;
+  const dungHan = setTimeout(
+    () => {
+      quaHan = true;
+      ctrl.abort();
+    },
+    Math.max(hanChot - Date.now(), 0),
+  );
   const giaHan = () => {
     clearTimeout(hetGio);
     hetGio = setTimeout(() => ctrl.abort(), CHO_GIUA_CHUNG);
@@ -252,6 +274,7 @@ function chuyenTiep({ dau, tiep, ctrl }: Extract<KetQuaThu, { kind: "chay" }>): 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       let coChu = Boolean(dau);
+      let biCat = false;
       if (dau) controller.enqueue(encoder.encode(dau));
       giaHan();
       try {
@@ -259,23 +282,38 @@ function chuyenTiep({ dau, tiep, ctrl }: Extract<KetQuaThu, { kind: "chay" }>): 
           const r = await tiep.next();
           if (r.done) break;
           giaHan();
-          const chunk = r.value.choices?.[0]?.delta?.content;
+          const lua = r.value.choices?.[0];
+          if (lua?.finish_reason === "length") biCat = true;
+          const chunk = lua?.delta?.content;
           if (chunk) {
             coChu = true;
             controller.enqueue(encoder.encode(chunk));
           }
         }
         if (!coChu) controller.enqueue(encoder.encode("⚠️ AI không trả về nội dung, vui lòng thử lại."));
+        else if (biCat) {
+          controller.enqueue(
+            encoder.encode("\n\n⚠️ Câu trả lời dài quá giới hạn nên bị cắt — hãy hỏi riêng từng chủ đề."),
+          );
+        }
       } catch (e) {
         console.error("[luan-giai] Stream bị ngắt:", e);
-        controller.enqueue(encoder.encode("\n\n⚠️ AI bị ngắt giữa chừng, vui lòng thử lại."));
+        controller.enqueue(
+          encoder.encode(
+            quaHan
+              ? "\n\n⚠️ Hết thời gian xử lý nên câu trả lời dừng ở đây — hãy hỏi riêng từng chủ đề."
+              : "\n\n⚠️ AI bị ngắt giữa chừng, vui lòng thử lại.",
+          ),
+        );
       } finally {
         clearTimeout(hetGio);
+        clearTimeout(dungHan);
         controller.close();
       }
     },
     cancel() {
       clearTimeout(hetGio);
+      clearTimeout(dungHan);
       ctrl.abort();
     },
   });
