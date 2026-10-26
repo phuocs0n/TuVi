@@ -2,12 +2,45 @@
 
 import type { LaSoRequest } from "@tuvi/shared-types";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 import { CANH_GIO, toSearchParams } from "@/lib/params";
 
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const NAM_HIEN_TAI = new Date().getFullYear();
+
+function Segmented<T extends string>({
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="segmented">
+      {options.map((o) => (
+        <label key={o.value} data-active={value === o.value}>
+          <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value)} />
+          {o.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, children, as: Tag = "label" }: { label: string; children: ReactNode; as?: "label" | "fieldset" }) {
+  const Title = Tag === "fieldset" ? "legend" : "span";
+  return (
+    <Tag className="grid min-w-0 gap-2 border-0 p-0">
+      <Title className="p-0 text-sm font-medium text-gold-soft">{label}</Title>
+      {children}
+    </Tag>
+  );
+}
 
 export function LaSoForm() {
   const router = useRouter();
@@ -21,8 +54,7 @@ export function LaSoForm() {
     lich: "duong",
     nhuan: false,
   });
-  const set = <K extends keyof LaSoRequest>(k: K, v: LaSoRequest[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof LaSoRequest>(k: K, v: LaSoRequest[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -30,95 +62,95 @@ export function LaSoForm() {
   };
 
   return (
-    <form className="card form" onSubmit={onSubmit}>
-      <h2>Lập lá số Tử Vi</h2>
+    <form className="glass relative grid gap-5 p-6 sm:p-8" onSubmit={onSubmit}>
+      <span aria-hidden className="absolute -top-px left-10 right-10 h-px bg-linear-to-r from-transparent via-gold to-transparent" />
+      <div>
+        <p className="eyebrow">Thông tin sinh</p>
+        <h2 className="mt-1 font-display text-3xl font-bold">Lập lá số Tử Vi</h2>
+      </div>
 
-      <label className="field">
-        <span>Họ và tên</span>
+      <Field label="Họ và tên">
         <input
+          className="input"
           value={form.ho_ten}
           onChange={(e) => set("ho_ten", e.target.value)}
           placeholder="Nguyễn Văn A"
           maxLength={100}
           autoComplete="name"
         />
-      </label>
+      </Field>
 
-      <fieldset className="field">
-        <legend>Giới tính</legend>
-        <div className="segmented">
-          {(["nam", "nu"] as const).map((g) => (
-            <label key={g} className={form.gioi_tinh === g ? "active" : ""}>
-              <input
-                type="radio"
-                name="gioi_tinh"
-                checked={form.gioi_tinh === g}
-                onChange={() => set("gioi_tinh", g)}
-              />
-              {g === "nam" ? "Nam" : "Nữ"}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <Field label="Giới tính" as="fieldset">
+        <Segmented
+          name="gioi_tinh"
+          value={form.gioi_tinh}
+          onChange={(v) => set("gioi_tinh", v)}
+          options={[
+            { value: "nam", label: "Nam" },
+            { value: "nu", label: "Nữ" },
+          ]}
+        />
+      </Field>
 
-      <fieldset className="field">
-        <legend>Ngày sinh</legend>
-        <div className="segmented small">
-          {(["duong", "am"] as const).map((l) => (
-            <label key={l} className={form.lich === l ? "active" : ""}>
-              <input
-                type="radio"
-                name="lich"
-                checked={form.lich === l}
-                onChange={() => set("lich", l)}
-              />
-              {l === "duong" ? "Dương lịch" : "Âm lịch"}
-            </label>
-          ))}
-        </div>
-        <div className="date-row">
-          <select aria-label="Ngày" value={form.ngay} onChange={(e) => set("ngay", +e.target.value)}>
+      <Field label="Ngày sinh" as="fieldset">
+        <Segmented
+          name="lich"
+          value={form.lich}
+          onChange={(v) => set("lich", v)}
+          options={[
+            { value: "duong", label: "Dương lịch" },
+            { value: "am", label: "Âm lịch" },
+          ]}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <select className="input" aria-label="Ngày" value={form.ngay} onChange={(e) => set("ngay", +e.target.value)}>
             {range(1, form.lich === "am" ? 30 : 31).map((d) => (
               <option key={d} value={d}>
                 Ngày {d}
               </option>
             ))}
           </select>
-          <select aria-label="Tháng" value={form.thang} onChange={(e) => set("thang", +e.target.value)}>
+          <select className="input" aria-label="Tháng" value={form.thang} onChange={(e) => set("thang", +e.target.value)}>
             {range(1, 12).map((m) => (
               <option key={m} value={m}>
                 Tháng {m}
               </option>
             ))}
           </select>
-          <select aria-label="Năm" value={form.nam} onChange={(e) => set("nam", +e.target.value)}>
-            {range(1900, NAM_HIEN_TAI).reverse().map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
+          <select className="input" aria-label="Năm" value={form.nam} onChange={(e) => set("nam", +e.target.value)}>
+            {range(1900, NAM_HIEN_TAI)
+              .reverse()
+              .map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
           </select>
         </div>
         {form.lich === "am" && (
-          <label className="check">
-            <input type="checkbox" checked={form.nhuan} onChange={(e) => set("nhuan", e.target.checked)} />
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <input
+              type="checkbox"
+              className="size-4 accent-gold"
+              checked={form.nhuan}
+              onChange={(e) => set("nhuan", e.target.checked)}
+            />
             Tháng nhuận
           </label>
         )}
-      </fieldset>
+      </Field>
 
-      <label className="field">
-        <span>Giờ sinh</span>
-        <select value={form.gio} onChange={(e) => set("gio", +e.target.value)}>
+      <Field label="Giờ sinh">
+        <select className="input" value={form.gio} onChange={(e) => set("gio", +e.target.value)}>
           {CANH_GIO.map((g) => (
             <option key={g.value} value={g.value}>
               Giờ {g.label}
             </option>
           ))}
         </select>
-      </label>
+      </Field>
 
-      <button type="submit" className="btn primary">
+      <button type="submit" className="btn btn-gold mt-1 w-full py-3 text-base">
         Xem lá số
       </button>
     </form>

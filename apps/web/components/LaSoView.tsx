@@ -3,8 +3,9 @@
 import type { LaSo } from "@tuvi/shared-types";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { AmDuong } from "@/components/AmDuong";
 import { HoiAI } from "@/components/HoiAI";
 import { LaSoChart } from "@/components/LaSoChart";
 import { LuanGiai } from "@/components/LuanGiai";
@@ -34,36 +35,52 @@ export function LaSoView() {
 
   if (!req) {
     return (
-      <div className="card center-msg">
+      <ThongBao>
         <p>Thiếu thông tin ngày giờ sinh.</p>
-        <Link href="/" className="btn primary">
+        <Link href="/#lap-la-so" className="btn btn-gold">
           Nhập thông tin
         </Link>
-      </div>
+      </ThongBao>
     );
   }
   if (error) {
     return (
-      <div className="card center-msg">
-        <p className="error">{error}</p>
-        <Link href="/" className="btn">
+      <ThongBao>
+        <p className="text-hoa-ky">{error}</p>
+        <Link href="/#lap-la-so" className="btn btn-ghost">
           Nhập lại
         </Link>
-      </div>
+      </ThongBao>
     );
   }
-  if (!laSo) return <div className="card center-msg">Đang an lá số…</div>;
+  if (!laSo) return <DangTai />;
 
   return (
     <>
-      <div className="toolbar">
-        <Link href="/" className="btn">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 pt-8 pb-5">
+        <Link href="/#lap-la-so" className="btn btn-ghost px-4 py-2 text-sm">
           ← Lập lá số khác
         </Link>
+        <button type="button" className="btn btn-ghost px-4 py-2 text-sm" onClick={() => window.print()}>
+          In lá số
+        </button>
       </div>
       <LaSoChart laSo={laSo} />
       <LuanGiai laSo={laSo} />
       <HoiAI req={req} />
     </>
+  );
+}
+
+function ThongBao({ children }: { children: ReactNode }) {
+  return <div className="glass mx-auto mt-16 grid max-w-md justify-items-center gap-5 p-10 text-center">{children}</div>;
+}
+
+export function DangTai() {
+  return (
+    <ThongBao>
+      <AmDuong className="size-14 animate-spin [animation-duration:4s]" />
+      <p className="font-display text-xl text-gold-soft">Đang an lá số…</p>
+    </ThongBao>
   );
 }
