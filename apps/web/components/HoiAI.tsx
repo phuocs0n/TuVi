@@ -3,6 +3,7 @@
 import type { LaSoRequest } from "@tuvi/shared-types";
 import { type ReactNode, useState } from "react";
 
+import { AmDuong } from "@/components/AmDuong";
 import { ApiError, luanGiai } from "@/lib/api";
 
 type State =
@@ -62,43 +63,58 @@ export function HoiAI({ req }: { req: LaSoRequest }) {
   };
 
   return (
-    <section className="card hoi-ai" aria-live="polite">
-      <h2>Hỏi AI</h2>
-      <p className="muted">
-        Hỏi riêng một chủ đề, AI sẽ đọc toàn bộ 12 cung để trả lời. Câu trả lời hiện dần khi AI viết;
-        mỗi người được hỏi vài lần mỗi giờ.
+    <section className="glass no-print relative mt-8 overflow-hidden p-6 sm:p-10" aria-live="polite">
+      <span
+        aria-hidden
+        className="absolute -top-px left-10 right-10 h-px bg-linear-to-r from-transparent via-cinnabar-bright to-transparent"
+      />
+      <p className="eyebrow">Trợ lý AI</p>
+      <h2 className="mt-1 font-display text-4xl font-bold">
+        Hỏi <span className="gold-text italic">AI</span>
+      </h2>
+      <p className="mt-2 text-sm text-muted">
+        Hỏi riêng một chủ đề, AI sẽ đọc toàn bộ 12 cung để trả lời. Câu trả lời hiện dần khi AI viết; mỗi người
+        được hỏi vài lần mỗi giờ.
       </p>
       <form
-        className="ask"
+        className="mt-6 flex flex-col gap-3 sm:flex-row"
         onSubmit={(e) => {
           e.preventDefault();
           void run(cauHoi);
         }}
       >
         <input
+          className="input flex-1"
           value={cauHoi}
           onChange={(e) => setCauHoi(e.target.value)}
           placeholder="Ví dụ: Sự nghiệp của tôi phù hợp với ngành nào?"
           maxLength={500}
           aria-label="Câu hỏi cho AI"
         />
-        <button type="submit" className="btn primary" disabled={state.kind === "loading"}>
+        <button type="submit" className="btn btn-gold shrink-0" disabled={state.kind === "loading"}>
           {state.kind === "loading" ? "AI đang viết…" : cauHoi.trim() ? "Hỏi AI" : "AI luận giải tổng quan"}
         </button>
       </form>
-      <div className="chips">
+      <div className="mt-3 flex flex-wrap gap-2">
         {GOI_Y.map((g) => (
           <button key={g} type="button" className="chip" onClick={() => setCauHoi(g)}>
             {g}
           </button>
         ))}
       </div>
-      {state.kind === "error" && <p className="error">{state.message}</p>}
+      {state.kind === "error" && (
+        <p className="mt-5 rounded-lg border border-hoa-ky/40 bg-hoa-ky/10 px-4 py-3 text-hoa-ky">{state.message}</p>
+      )}
       {state.kind === "loading" && !boNhap(state.text) && (
-        <p className="muted">AI đang đọc lá số… (dịch vụ miễn phí có thể phải chờ đến 1–2 phút)</p>
+        <p className="mt-6 flex items-center gap-3 text-muted">
+          <AmDuong className="size-6 animate-spin [animation-duration:3s]" />
+          AI đang đọc lá số… (dịch vụ miễn phí có thể phải chờ đến 1–2 phút)
+        </p>
       )}
       {(state.kind === "loading" || state.kind === "done") && boNhap(state.text) && (
-        <VanBan text={boNhap(state.text)} />
+        <div className="mt-6 border-t border-line pt-6 leading-relaxed">
+          <VanBan text={boNhap(state.text)} />
+        </div>
       )}
     </section>
   );
